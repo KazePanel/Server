@@ -1,8 +1,8 @@
+setuptools<70.0.0
 python-telegram-bot==13.15
 requests
 flask
 flask-cors
 tornado==6.1
 urllib3==1.26.18
-setuptools
 psycopg2-binary
