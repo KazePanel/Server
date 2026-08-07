@@ -419,13 +419,21 @@ def handle_list(db_type):
 
         if status_filter == "revoked":
             cur.execute(
-                "SELECT key_code, device, expiry, max_devices FROM keys WHERE"
-                " revoked = TRUE ORDER BY expiry DESC;"
+                """
+                SELECT key_code, device, expiry, max_devices 
+                FROM keys 
+                WHERE revoked = TRUE 
+                ORDER BY expiry DESC;
+                """
             )
         else:
             cur.execute(
-                "SELECT key_code, device, expiry, max_devices FROM keys WHERE"
-                " revoked = FALSE AND expiry > %s ORDER BY expiry ASC;",
+                """
+                SELECT key_code, device, expiry, max_devices 
+                FROM keys 
+                WHERE revoked = FALSE AND expiry > %s 
+                ORDER BY expiry ASC;
+                """,
                 (now,),
             )
 
@@ -590,223 +598,4 @@ def stats_script():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-SET revoked = FALSE WHERE key_code = %s;", (key,))
-    conn.commit()
-    count = cur.rowcount
-    cur.close()
-    conn.close()
-
-    if count == 0:
-      return jsonify({"status": "error", "message": "Key not found"}), 404
-
-    tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
-    send_telegram_alert(f"🟢 *{tag} Key Successfully Unrevoked*\nKey: `{key}`")
-    return jsonify({"status": "success"})
-  except Exception as e:
-    return jsonify({"status": "error", "message": str(e)}), 500
-
-
-def handle_reset(db_type):
-  key = request.args.get("key")
-  if not key:
-    return jsonify({"status": "error"}), 400
-
-  conn = get_db_connection(db_type)
-  cur = conn.cursor()
-  cur.execute(
-      "UPDATE keys SET device = NULL, login_time = NULL WHERE key_code = %s;",
-      (key,),
-  )
-  conn.commit()
-  count = cur.rowcount
-  cur.close()
-  conn.close()
-
-  if count == 0:
-    return jsonify({"status": "error"}), 404
-  tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
-  send_telegram_alert(f"🔄 *{tag} Key Device Reset*\nKey: `{key}`")
-  return jsonify({"status": "success"})
-
-
-def handle_list(db_type):
-  try:
-    status_filter = request.args.get("status", "active")
-    now = time.time()
-
-    conn = get_db_connection(db_type)
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-
-    if status_filter == "revoked":
-      cur.execute(
-          "SELECT key_code, device, expiry, max_devices FROM keys WHERE"
-          " revoked = TRUE ORDER BY expiry DESC;"
-      )
-    else:
-      cur.execute(
-          "SELECT key_code, device, expiry, max_devices FROM keys WHERE"
-          " revoked = FALSE AND expiry > %s ORDER BY expiry ASC;",
-          (now,),
-      )
-
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    result = []
-    for r in rows:
-      result.append({
-          "key": r.get("key_code") or "UNKNOWN",
-          "device": r.get("device"),
-          "max_devices": r.get("max_devices") or 1,
-      })
-    return jsonify(result)
-  except Exception as e:
-    return jsonify({
-        "status": "error",
-        "message": f"Backend list failure: {str(e)}",
-    }), 500
-
-
-def handle_delete(db_type):
-  key = request.args.get("key")
-  if not key:
-    return jsonify({"status": "error", "message": "Missing key"}), 400
-  try:
-    conn = get_db_connection(db_type)
-    cur = conn.cursor()
-    cur.execute("DELETE FROM keys WHERE key_code = %s;", (key,))
-    conn.commit()
-    count = cur.rowcount
-    cur.close()
-    conn.close()
-    if count == 0:
-      return jsonify({"status": "error", "message": "Key not found"}), 404
-    return jsonify({"status": "success"})
-  except Exception as e:
-    return jsonify({"status": "error", "message": str(e)}), 500
-
-
-def handle_stats(db_type):
-  try:
-    now = time.time()
-    conn = get_db_connection(db_type)
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM keys;")
-    total = cur.fetchone()[0]
-    cur.execute(
-        "SELECT COUNT(*) FROM keys WHERE revoked = FALSE AND expiry > %s;",
-        (now,),
-    )
-    active = cur.fetchone()[0]
-    cur.close()
-    conn.close()
-
-    return jsonify({
-        "total_keys": total,
-        "active_keys": active,
-        "expired_keys": total - active,
-    })
-  except Exception:
-    return jsonify({"total_keys": 0, "active_keys": 0, "expired_keys": 0})
-
-
-# ==========================================
-# 2. ROUTES FOR CODM INJECTOR (Default)
-# ==========================================
-@app.route("/getkey")
-def getkey_injector():
-  return handle_getkey("injector")
-
-
-@app.route("/customkey")
-def custom_key_injector():
-  return handle_customkey("injector")
-
-
-@app.route("/verify")
-def verify_injector():
-  return handle_verify("injector")
-
-
-@app.route("/revoke")
-def revoke_injector():
-  return handle_revoke("injector")
-
-
-@app.route("/unrevoke")
-def unrevoke_injector():
-  return handle_unrevoke("injector")
-
-
-@app.route("/reset")
-def reset_injector():
-  return handle_reset("injector")
-
-
-@app.route("/list")
-def list_injector():
-  return handle_list("injector")
-
-
-@app.route("/delete")
-def delete_injector():
-  return handle_delete("injector")
-
-
-@app.route("/stats")
-def stats_injector():
-  return handle_stats("injector")
-
-
-# ==========================================
-# 3. ROUTES FOR CODM SCRIPT
-# ==========================================
-@app.route("/script/getkey")
-def getkey_script():
-  return handle_getkey("script")
-
-
-@app.route("/script/customkey")
-def custom_key_script():
-  return handle_customkey("script")
-
-
-@app.route("/script/verify")
-def verify_script():
-  return handle_verify("script")
-
-
-@app.route("/script/revoke")
-def revoke_script():
-  return handle_revoke("script")
-
-
-@app.route("/script/unrevoke")
-def unrevoke_script():
-  return handle_unrevoke("script")
-
-
-@app.route("/script/reset")
-def reset_script():
-  return handle_reset("script")
-
-
-@app.route("/script/list")
-def list_script():
-  return handle_list("script")
-
-
-@app.route("/script/delete")
-def delete_script():
-  return handle_delete("script")
-
-
-@app.route("/script/stats")
-def stats_script():
-  return handle_stats("script")
-
-
-if __name__ == "__main__":
-  port = int(os.environ.get("PORT", 10000))
-  app.run(host="0.0.0.0", port=port)
+        
