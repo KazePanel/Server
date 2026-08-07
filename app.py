@@ -72,39 +72,44 @@ def send_telegram_alert(message: str):
 
 
 def format_remaining_time(seconds: int) -> str:
-  if seconds <= 0:
-    return "Expired"
-  if seconds >= 900000000:
-    return "Lifetime"
+    seconds = int(seconds)
+    if seconds <= 0:
+        return "Expired"
+    if seconds >= 900000000:
+        return "Lifetime"
 
-  days = seconds // 86400
-  hours = (seconds % 86400) // 3600
-  minutes = (seconds % 3600) // 60
+    days = seconds // 86400
+    hours = (seconds % 86400) // 3600
+    minutes = (seconds % 3600) // 60
 
-  parts = []
-  if days > 0:
-    parts.append(f"{int(days)}d")
-  if hours > 0:
-    parts.append(f"{int(hours)}h")
-  if minutes > 0:
-    parts.append(f"{int(minutes)}m")
+    parts = []
+    if days > 0:
+        parts.append(f"{days}d")
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0:
+        parts.append(f"{minutes}m")
 
-  if not parts:
-    return "Less than 1m"
-  return " ".join(parts)
+    if not parts:
+        return "Less than 1m"
+    return " ".join(parts)
 
-
-def convert_duration(duration: str):
-  duration = duration.lower()
-  if duration.endswith("m"):
-    return int(duration[:-1]) * 60
-  if duration.endswith("h"):
-    return int(duration[:-1]) * 3600
-  if duration.endswith("d"):
-    return int(duration[:-1]) * 86400
-  if duration == "lifetime":
-    return 999999999
-  return 1800
+def convert_duration(duration: str) -> int:
+    if not duration:
+        return 1800
+    duration = str(duration).lower().strip()
+    try:
+        if duration.endswith("m"):
+            return int(duration[:-1]) * 60
+        if duration.endswith("h"):
+            return int(duration[:-1]) * 3600
+        if duration.endswith("d"):
+            return int(duration[:-1]) * 86400
+        if duration == "lifetime":
+            return 999999999
+        return int(duration)
+    except ValueError:
+        return 1800
 
 
 @app.route("/")
