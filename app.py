@@ -253,7 +253,7 @@ def handle_verify(db_type):
     key = request.args.get("key")
     device = request.args.get("device")
     if not key or not device:
-        return jsonify({"status": "invalid"}), 400
+        return "invalid", 200, {'Content-Type': 'text/plain'}
 
     conn = get_db_connection(db_type)
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -265,7 +265,7 @@ def handle_verify(db_type):
     if not data:
         cur.close()
         conn.close()
-        return jsonify({"status": "invalid"})
+        return "invalid", 200, {'Content-Type': 'text/plain'}
 
     if data["revoked"]:
         cur.close()
@@ -273,7 +273,7 @@ def handle_verify(db_type):
         send_telegram_alert(
             f"❌ *{tag} Key Revoked Attempt*\nKey: `{key}`\nDevice: `{device}`"
         )
-        return jsonify({"status": "revoked"})
+        return "revoked", 200, {'Content-Type': 'text/plain'}
 
     now = time.time()
     if now > data["expiry"]:
@@ -282,19 +282,12 @@ def handle_verify(db_type):
         send_telegram_alert(
             f"❌ *{tag} Key Expired Attempt*\nKey: `{key}`\nDevice: `{device}`"
         )
-        return jsonify({"status": "expired"})
+        return "expired", 200, {'Content-Type': 'text/plain'}
 
     current_devices = data["device"].split(",") if data["device"] else []
     max_allowed = data.get("max_devices", 1)
     remaining_seconds = int(data["expiry"] - now)
     time_left_str = format_remaining_time(remaining_seconds)
-
-    def success_response():
-        return jsonify({
-            "status": "valid",
-            "expires_in_sec": remaining_seconds,
-            "expire_str": time_left_str,
-        })
 
     if device in current_devices:
         cur.close()
@@ -307,7 +300,7 @@ def handle_verify(db_type):
             f"Device: `{device}`\n"
             f"Expires in: `{time_left_str}`"
         )
-        return success_response()
+        return "valid", 200, {'Content-Type': 'text/plain'}
 
     if len(current_devices) < max_allowed:
         current_devices.append(device)
@@ -330,7 +323,7 @@ def handle_verify(db_type):
             f"Device: `{device}`\n"
             f"Expires in: `{time_left_str}`"
         )
-        return success_response()
+        return "valid", 200, {'Content-Type': 'text/plain'}
 
     cur.close()
     conn.close()
@@ -340,8 +333,7 @@ def handle_verify(db_type):
         f"Attempt Device: `{device}`\n"
         f"Slots: `{len(current_devices)}/{max_allowed}`"
     )
-    return jsonify({"status": "locked"})
-
+    return "locked", 200, {'Content-Type': 'text/plain'}
 
 def handle_revoke(db_type):
     key = request.args.get("key")
