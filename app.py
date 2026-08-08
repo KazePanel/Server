@@ -247,13 +247,18 @@ def handle_customkey(db_type):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 def handle_verify(db_type):
     cleanup()
     key = request.args.get("key")
     device = request.args.get("device")
+    
+    # Check kung Injector o Script ang tumatawag
+    is_injector = (db_type == "injector")
+
     if not key or not device:
-        return "invalid", 200, {'Content-Type': 'text/plain'}
+        if is_injector:
+            return "invalid", 200, {'Content-Type': 'text/plain'}
+        return jsonify({"status": "invalid"}), 400
 
     conn = get_db_connection(db_type)
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -265,29 +270,40 @@ def handle_verify(db_type):
     if not data:
         cur.close()
         conn.close()
-        return "invalid", 200, {'Content-Type': 'text/plain'}
+        if is_injector:
+            return "invalid", 200, {'Content-Type': 'text/plain'}
+        return jsonify({"status": "invalid"})
 
     if data["revoked"]:
         cur.close()
         conn.close()
-        send_telegram_alert(
-            f"❌ *{tag} Key Revoked Attempt*\nKey: `{key}`\nDevice: `{device}`"
-        )
-        return "revoked", 200, {'Content-Type': 'text/plain'}
+        send_telegram_alert(f"❌ *{tag} Key Revoked Attempt*\nKey: `{key}`\nDevice: `{device}`")
+        if is_injector:
+            return "revoked", 200, {'Content-Type': 'text/plain'}
+        return jsonify({"status": "revoked"})
 
     now = time.time()
     if now > data["expiry"]:
         cur.close()
         conn.close()
-        send_telegram_alert(
-            f"❌ *{tag} Key Expired Attempt*\nKey: `{key}`\nDevice: `{device}`"
-        )
-        return "expired", 200, {'Content-Type': 'text/plain'}
+        send_telegram_alert(f"❌ *{tag} Key Expired Attempt*\nKey: `{key}`\nDevice: `{device}`")
+        if is_injector:
+            return "expired", 200, {'Content-Type': 'text/plain'}
+        return jsonify({"status": "expired"})
 
     current_devices = data["device"].split(",") if data["device"] else []
     max_allowed = data.get("max_devices", 1)
     remaining_seconds = int(data["expiry"] - now)
     time_left_str = format_remaining_time(remaining_seconds)
+
+    def success_response():
+        if is_injector:
+            return "valid", 200, {'Content-Type': 'text/plain'}
+        return jsonify({
+            "status": "valid",
+            "expires_in_sec": remaining_seconds,
+            "expire_str": time_left_str,
+        })
 
     if device in current_devices:
         cur.close()
@@ -300,7 +316,7 @@ def handle_verify(db_type):
             f"Device: `{device}`\n"
             f"Expires in: `{time_left_str}`"
         )
-        return "valid", 200, {'Content-Type': 'text/plain'}
+        return success_response()
 
     if len(current_devices) < max_allowed:
         current_devices.append(device)
@@ -314,16 +330,14 @@ def handle_verify(db_type):
         cur.close()
         conn.close()
 
-        counter_str = (
-            f" ({len(current_devices)}/{max_allowed})" if max_allowed > 1 else ""
-        )
+        counter_str = f" ({len(current_devices)}/{max_allowed})" if max_allowed > 1 else ""
         send_telegram_alert(
             f"✓ *{tag} Key Used{counter_str}*\n"
             f"Key: `{key}`\n"
             f"Device: `{device}`\n"
             f"Expires in: `{time_left_str}`"
         )
-        return "valid", 200, {'Content-Type': 'text/plain'}
+        return success_response()
 
     cur.close()
     conn.close()
@@ -333,27 +347,11 @@ def handle_verify(db_type):
         f"Attempt Device: `{device}`\n"
         f"Slots: `{len(current_devices)}/{max_allowed}`"
     )
-    return "locked", 200, {'Content-Type': 'text/plain'}
-
-def handle_revoke(db_type):
-    key = request.args.get("key")
-    if not key:
-        return jsonify({"status": "error"}), 400
-
-    conn = get_db_connection(db_type)
-    cur = conn.cursor()
-    cur.execute("UPDATE keys SET revoked = TRUE WHERE key_code = %s;", (key,))
-    conn.commit()
-    count = cur.rowcount
-    cur.close()
-    conn.close()
-
-    if count == 0:
-        return jsonify({"status": "error"}), 404
-    tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
-    send_telegram_alert(f"🚫 *{tag} Key Revoked*\nKey: `{key}`")
-    return jsonify({"status": "success"})
-
+    
+    if is_injector:
+        return "locked", 200, {'Content-Type': 'text/plain'}
+    return jsonify({"status": "locked"})
+    
 
 def handle_unrevoke(db_type):
     key = request.args.get("key")
