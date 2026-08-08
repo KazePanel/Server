@@ -247,7 +247,7 @@ def handle_customkey(db_type):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-Def handle_verify(db_type):
+def handle_verify(db_type):
     cleanup()
     key = request.args.get("key")
     device = request.args.get("device")
