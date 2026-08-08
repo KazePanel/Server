@@ -247,91 +247,99 @@ def handle_customkey(db_type):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-def handle_verify(db_type):
-  cleanup()
-  key = request.args.get("key")
-  device = request.args.get("device")
-  if not key or not device:
-    return "invalid"
+Def handle_verify(db_type):
+    cleanup()
+    key = request.args.get("key")
+    device = request.args.get("device")
+    if not key or not device:
+        return jsonify({"status": "invalid"}), 400
 
-  conn = get_db_connection(db_type)
-  cur = conn.cursor(cursor_factory=RealDictCursor)
-  cur.execute("SELECT * FROM keys WHERE key_code = %s;", (key,))
-  data = cur.fetchone()
+    conn = get_db_connection(db_type)
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM keys WHERE key_code = %s;", (key,))
+    data = cur.fetchone()
 
-  tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
+    tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
 
-  if not data:
-    cur.close()
-    conn.close()
-    return "invalid"
+    if not data:
+        cur.close()
+        conn.close()
+        return jsonify({"status": "invalid"})
 
-  if data["revoked"]:
+    if data["revoked"]:
+        cur.close()
+        conn.close()
+        send_telegram_alert(
+            f"❌ *{tag} Key Revoked Attempt*\nKey: `{key}`\nDevice: `{device}`"
+        )
+        return jsonify({"status": "revoked"})
+
+    now = time.time()
+    if now > data["expiry"]:
+        cur.close()
+        conn.close()
+        send_telegram_alert(
+            f"❌ *{tag} Key Expired Attempt*\nKey: `{key}`\nDevice: `{device}`"
+        )
+        return jsonify({"status": "expired"})
+
+    current_devices = data["device"].split(",") if data["device"] else []
+    max_allowed = data.get("max_devices", 1)
+    remaining_seconds = int(data["expiry"] - now)
+    time_left_str = format_remaining_time(remaining_seconds)
+
+    def success_response():
+        return jsonify({
+            "status": "valid",
+            "expires_in_sec": remaining_seconds,
+            "expire_str": time_left_str,
+        })
+
+    if device in current_devices:
+        cur.close()
+        conn.close()
+        device_index = current_devices.index(device) + 1
+        counter_str = f" ({device_index}/{max_allowed})" if max_allowed > 1 else ""
+        send_telegram_alert(
+            f"✓ *{tag} Key Used{counter_str}*\n"
+            f"Key: `{key}`\n"
+            f"Device: `{device}`\n"
+            f"Expires in: `{time_left_str}`"
+        )
+        return success_response()
+
+    if len(current_devices) < max_allowed:
+        current_devices.append(device)
+        new_device_string = ",".join(current_devices)
+
+        cur.execute(
+            "UPDATE keys SET device = %s, login_time = %s WHERE key_code = %s;",
+            (new_device_string, now, key),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        counter_str = (
+            f" ({len(current_devices)}/{max_allowed})" if max_allowed > 1 else ""
+        )
+        send_telegram_alert(
+            f"✓ *{tag} Key Used{counter_str}*\n"
+            f"Key: `{key}`\n"
+            f"Device: `{device}`\n"
+            f"Expires in: `{time_left_str}`"
+        )
+        return success_response()
+
     cur.close()
     conn.close()
     send_telegram_alert(
-        f"âŒ *{tag} Key Revoked Attempt*\nKey: `{key}`\nDevice: `{device}`"
-    )
-    return "revoked"
-
-  if time.time() > data["expiry"]:
-    cur.close()
-    conn.close()
-    send_telegram_alert(
-        f"âŒ *{tag} Key Expired Attempt*\nKey: `{key}`\nDevice: `{device}`"
-    )
-    return "expired"
-
-  current_devices = data["device"].split(",") if data["device"] else []
-  max_allowed = data.get("max_devices", 1)
-  remaining_seconds = int(data["expiry"] - time.time())
-  time_left_str = format_remaining_time(remaining_seconds)
-
-  if device in current_devices:
-    cur.close()
-    conn.close()
-    device_index = current_devices.index(device) + 1
-    counter_str = f" ({device_index}/{max_allowed})" if max_allowed > 1 else ""
-    send_telegram_alert(
-        f"âœ“ *{tag} Key Used{counter_str}*\n"
+        f"🔒 *{tag} Max Device Limit Reached*\n"
         f"Key: `{key}`\n"
-        f"Device: `{device}`\n"
-        f"Expires in: `{time_left_str}`"
+        f"Attempt Device: `{device}`\n"
+        f"Slots: `{len(current_devices)}/{max_allowed}`"
     )
-    return "valid"
-
-  if len(current_devices) < max_allowed:
-    current_devices.append(device)
-    new_device_string = ",".join(current_devices)
-
-    cur.execute(
-        "UPDATE keys SET device = %s, login_time = %s WHERE key_code = %s;",
-        (new_device_string, time.time(), key),
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    counter_str = (
-        f" ({len(current_devices)}/{max_allowed})" if max_allowed > 1 else ""
-    )
-    send_telegram_alert(
-        f"âœ“ *{tag} Key Used{counter_str}*\n"
-        f"Key: `{key}`\n"
-        f"Device: `{device}`\n"
-        f"Expires in: `{time_left_str}`"
-    )
-    return "valid"
-
-  cur.close()
-  conn.close()
-  send_telegram_alert(
-      f"ðŸ”’ *{tag} Max Device Limit Reached*\n"
-      f"Key: `{key}`\n"
-      f"Attempt Device: `{device}`\n"
-      f"Slots: `{len(current_devices)}/{max_allowed}`"
-  )
-  return "locked"
+    return jsonify({"status": "locked"})
 
 def handle_unrevoke(db_type):
     key = request.args.get("key")
