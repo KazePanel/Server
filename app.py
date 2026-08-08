@@ -252,7 +252,6 @@ def handle_verify(db_type):
     key = request.args.get("key")
     device = request.args.get("device")
     
-    # Check kung Injector o Script ang tumatawag
     is_injector = (db_type == "injector")
 
     if not key or not device:
@@ -298,6 +297,7 @@ def handle_verify(db_type):
 
     def success_response():
         if is_injector:
+            # Dito natin sinisigurong plain text na "valid" ang ibabato na may kasamang tamang HTTP headers
             return "valid", 200, {'Content-Type': 'text/plain'}
         return jsonify({
             "status": "valid",
@@ -351,6 +351,7 @@ def handle_verify(db_type):
     if is_injector:
         return "locked", 200, {'Content-Type': 'text/plain'}
     return jsonify({"status": "locked"})
+    
     
 
 def handle_unrevoke(db_type):
