@@ -1,633 +1,487 @@
-import os
-import random
-import string
-import time
-import uuid
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import requests
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>KAZEHAYAMODZ FREE KEY GENERATOR</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
 
-app = Flask(__name__)
-CORS(app)
+<style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
 
-# ======================
-# CONSTANTS & LOCAL MEMORY (RAM)
-# ======================
-TOKEN_EXPIRY = 20
-COOLDOWN = 120
-KEY_LIMIT = 120
-COOLDOWN_LIMIT = 86400  # 24 Hours in seconds (Bawal kumuha ulit hanggang lumipas ang 24 oras)
+body {
+    height: 100dvh;
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #080b11;
+    font-family: 'Rajdhani', sans-serif;
+    color: white;
+    overflow: hidden;
+    position: relative;
+}
 
-db_cache = {"tokens": {}, "ip_limit": {}, "cooldowns": {}, "daily_limit": {}}
+/* Background Ambient Glow */
+body::before {
+    content: "";
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(0, 255, 213, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+    top: 20%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 0;
+    pointer-events: none;
+}
 
-TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = os.getenv("OWNER_ID")
+/* Container Card with Glassmorphism */
+.container {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    height: 100dvh;
+    background: rgba(15, 22, 36, 0.85);
+    backdrop-filter: blur(12px);
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 40px 24px;
+    text-align: center;
+    z-index: 1;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+}
 
-# Dalawang hiwalay na Database URLs
-DB_URL_INJECTOR = os.getenv("DATABASE_URL_INJECTOR") or os.getenv("DATABASE_URL")
-DB_URL_SCRIPT = os.getenv("DATABASE_URL_SCRIPT")
+/* Top Neon Line */
+.container::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #ff0055, #00ffd5, #7000ff);
+    background-size: 200% 100%;
+    animation: neonGlow 4s linear infinite;
+    z-index: 10;
+}
 
+@keyframes neonGlow {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 200% 0%; }
+}
 
-# Helper function para pumili ng database
-def get_db_connection(db_type="injector"):
-    if db_type == "script":
-        url = DB_URL_SCRIPT
-        db_name = "DATABASE_URL_SCRIPT"
-    else:
-        url = DB_URL_INJECTOR
-        db_name = "DATABASE_URL_INJECTOR"
+/* ==============================
+   HEADER STYLES
+   ============================== */
+header {
+    margin-top: 10px;
+}
 
-    if not url:
-        raise ValueError(f"{db_name} environment variable is missing sa Render!")
-    return psycopg2.connect(url)
+.brand-box {
+    position: relative;
+    display: inline-block;
+    padding: 16px 24px;
+    background: rgba(10, 15, 26, 0.9);
+    border-radius: 16px;
+    border: 1px solid rgba(0, 255, 213, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(0, 255, 213, 0.05);
+}
 
+header h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.35;
+}
 
-# ======================
-# HELPERS
-# ======================
-def cleanup():
-    now = time.time()
-    for t in list(db_cache["tokens"].keys()):
-        if now - db_cache["tokens"][t]["time"] > TOKEN_EXPIRY:
-            del db_cache["tokens"][t]
-    for ip in list(db_cache["ip_limit"].keys()):
-        if now - db_cache["ip_limit"][ip] > KEY_LIMIT:
-            del db_cache["ip_limit"][ip]
-            
-    # Linisin ang 24-hour limit paglipas ng 24 oras (86400 seconds)
-    for ip in list(db_cache["daily_limit"].keys()):
-        if now - db_cache["daily_limit"][ip]["time"] > COOLDOWN_LIMIT:
-            del db_cache["daily_limit"][ip]
+header p {
+    color: #00ffd5;
+    font-size: 12px;
+    margin-top: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(0, 255, 213, 0.4);
+}
 
+/* ==============================
+   BUTTONS GROUP
+   ============================== */
+.btn-group {
+    width: 100%;
+    margin: auto 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
 
-# ======================
-# ANTI-VPN CHECK HELPER
-# ======================
-def is_vpn_or_proxy(ip: str) -> bool:
-    if ip in ["127.0.0.1", "localhost", "::1"]:
-        return False
+.btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 16px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    text-decoration: none;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn:active {
+    transform: scale(0.96);
+}
+
+/* Key Button */
+.key {
+    background: linear-gradient(135deg, #00ffd5 0%, #00b894 100%);
+    color: #080b11;
+    box-shadow: 0 4px 20px rgba(0, 255, 213, 0.35);
+}
+
+.key:hover {
+    box-shadow: 0 6px 25px rgba(0, 255, 213, 0.5);
+}
+
+/* Telegram Button */
+.telegram {
+    background: linear-gradient(135deg, #229ED9 0%, #0077b5 100%);
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(34, 158, 217, 0.3);
+}
+
+/* Tutorial Button */
+.tutorial {
+    background: rgba(255, 68, 68, 0.1);
+    color: #ff5555;
+    border: 1px solid rgba(255, 68, 68, 0.4);
+    box-shadow: 0 4px 15px rgba(255, 68, 68, 0.15);
+}
+
+/* ==============================
+   FOOTER STYLES
+   ============================== */
+footer {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.warning {
+    font-size: 12px;
+    color: #fbbf24;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.owner {
+    font-size: 13px;
+    color: #94a3b8;
+    font-weight: 700;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.owner:hover {
+    color: #00ffd5;
+}
+
+/* VIP Button */
+.vip-btn-small {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    margin-top: 6px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 20px;
+    text-decoration: none;
+    background: linear-gradient(135deg, #ffe259 0%, #ffa751 100%);
+    color: #000;
+    box-shadow: 0 0 15px rgba(255, 167, 81, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.vip-btn-small:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 20px rgba(255, 167, 81, 0.6);
+}
+
+/* ==============================
+   BLOCKING OVERLAY MODAL
+   ============================== */
+.lock-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 11, 17, 0.92);
+    backdrop-filter: blur(16px);
+    z-index: 999;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.lock-card {
+    background: rgba(15, 23, 42, 0.95);
+    border: 2px solid rgba(255, 68, 68, 0.6);
+    padding: 30px 24px;
+    border-radius: 24px;
+    box-shadow: 0 0 50px rgba(255, 68, 68, 0.3);
+    width: 100%;
+    max-width: 340px;
+    text-align: center;
+}
+
+.lock-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 18px;
+    color: #ff4444;
+    font-weight: 900;
+    margin-bottom: 12px;
+    text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+}
+
+.lock-desc {
+    font-size: 15px;
+    color: #cbd5e1;
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+
+.lock-timer {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 24px;
+    color: #00ffd5;
+    font-weight: 900;
+    text-shadow: 0 0 15px rgba(0, 255, 213, 0.5);
+    background: rgba(0, 255, 213, 0.05);
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 255, 213, 0.2);
+}
+
+/* ==============================
+   MODAL / POPUP INFO
+   ============================== */
+.generator-info {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(16px);
+    padding: 28px;
+    border-radius: 24px;
+    border: 1px solid rgba(0, 255, 213, 0.3);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 255, 213, 0.1);
+    z-index: 100;
+    font-size: 15px;
+    color: #cbd5e1;
+    line-height: 1.6;
+    width: 88%;
+    max-width: 320px;
+    display: none;
+    text-align: center;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.generator-info.active {
+    display: block;
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.close-info {
+    display: block;
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px;
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 12px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.close-info:hover {
+    background: #ef4444;
+    color: white;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <header>
+        <div class="brand-box">
+            <h1>KAZEHAYAMODZ<br>FREE KEY GENERATOR</h1>
+        </div>
+        <p>Official Free Key Generator</p>
+    </header>
+
+    <div class="btn-group">
+        <a class="btn key" href="select.html">🔑 Get Free Key</a>
+        <a class="btn telegram" href="https://t.me/KazeMainChannel">📢 Join Telegram</a>
+        <a class="btn tutorial" href="https://t.me/KazeTutorial/33">🎥 Watch Tutorial</a>
+    </div>
         
-    try:
-        response = requests.get(f"http://ip-api.com/json/{ip}?fields=status,hosting", timeout=3)
-        data = response.json()
-        
-        if data.get("status") == "success":
-            if data.get("hosting") == True:
-                return True
-    except Exception:
-        pass
-        
-    return False
+    <footer>
+        <p class="warning">⚠️ Report any bugs to the developer</p>
+        <span class="owner" id="open-info">Developer: @KAZEHAYAMODZ</span>
+        <a class="vip-btn-small" href="https://t.me/KAZEHAYAMODZ" target="_blank">⭐ Buy VIP Key</a>
+    </footer>
 
+</div>
 
-def send_telegram_alert(message: str):
-    if not TELEGRAM_BOT_TOKEN or not OWNER_ID:
-        return
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": OWNER_ID,
-        "text": message,
-        "parse_mode": "Markdown",
+<!-- BLOCKING OVERLAY MODAL (Hindi nila ma-click ang nasa labas) -->
+<div class="lock-overlay" id="lockOverlay">
+    <div class="lock-card">
+        <div class="lock-title" id="lockTitle">ACCESS RESTRICTED</div>
+        <div class="lock-desc" id="lockDesc">Please wait...</div>
+        <div class="lock-timer" id="lockTimer">--:--:--</div>
+    </div>
+</div>
+
+<div class="generator-info" id="info-box">
+    Official free key generator.<br>
+    Key duration: <b style="color:#00ffd5">3 hours</b>.<br>
+    Limit: <b style="color:#00ffd5">1 Key per 24 hours</b>.<br><br>
+    You can generate a new key once your timer expires.
+    <button class="close-info" id="close-info">CLOSE</button>
+</div>
+
+<script>
+// Anti-back logic
+history.pushState(null, null, location.href);
+window.onpopstate = function() { history.go(1); };
+
+// Overlay info modal logic
+const openBtn = document.getElementById('open-info');
+const closeBtn = document.getElementById('close-info');
+const infoBox = document.getElementById('info-box');
+
+openBtn.onclick = () => infoBox.classList.add('active');
+closeBtn.onclick = () => infoBox.classList.remove('active');
+
+// ==============================
+// CHECK VPN & 24-HOUR LIMIT STATUS
+// ==============================
+async function checkSystemStatus() {
+    const lockOverlay = document.getElementById('lockOverlay');
+    const lockTitle = document.getElementById('lockTitle');
+    const lockDesc = document.getElementById('lockDesc');
+    const lockTimer = document.getElementById('lockTimer');
+
+    try {
+        // I-check sa server kung naka-VPN
+        let res = await fetch("https://server-vu9x.onrender.com/token", { cache: "no-store" });
+        let data = await res.json();
+        
+        if (!res.ok && data.message && data.message.toLowerCase().includes("vpn")) {
+            lockTitle.innerText = "VPN DETECTED";
+            lockDesc.innerText = "VPN detected please turn off your vpn";
+            lockTimer.style.display = "none"; // Itago ang timer dahil bawal ang VPN
+            lockOverlay.style.display = "flex";
+            return;
+        }
+
+        // Check kung naabot na ang 24-hour limit (binabasa mula sa huling kuha)
+        checkLocalStorageLimit();
+
+    } catch (e) {
+        // Kung may network error, hayaan lang gumana ang site normally
     }
-    try:
-        requests.post(url, data=payload, timeout=5)
-    except Exception:
-        pass
-
-
-def format_remaining_time(seconds: int) -> str:
-    seconds = int(seconds)
-    if seconds <= 0:
-        return "Expired"
-    if seconds >= 900000000:
-        return "Lifetime"
-
-    days = seconds // 86400
-    hours = (seconds % 86400) // 3600
-    minutes = (seconds % 3600) // 60
-
-    parts = []
-    if days > 0:
-        parts.append(f"{days}d")
-    if hours > 0:
-        parts.append(f"{hours}h")
-    if minutes > 0:
-        parts.append(f"{minutes}m")
-
-    if not parts:
-        return "Less than 1m"
-    return " ".join(parts)
-
-
-def convert_duration(duration: str) -> int:
-    if not duration:
-        return 10800  # Default to 3 hours if empty
-    duration = str(duration).lower().strip()
-    try:
-        if duration.endswith("m"):
-            return int(duration[:-1]) * 60
-        if duration.endswith("h"):
-            return int(duration[:-1]) * 3600
-        if duration.endswith("d"):
-            return int(duration[:-1]) * 86400
-        if duration == "lifetime":
-            return 999999999
-        return int(duration)
-    except ValueError:
-        return 10800
-
-
-@app.route("/")
-def home():
-    return "KAZE SERVER ONLINE"
-
-
-@app.route("/token")
-def token():
-    cleanup()
-    ip = request.remote_addr
-    now = time.time()
-    source = request.args.get("src", "site")
-
-    # Anti-VPN Check
-    if is_vpn_or_proxy(ip):
-        return jsonify({
-            "status": "error",
-            "message": "VPN or Proxy detected! Please disable your VPN to continue."
-        }), 403
-
-    # Check kung nakakuha na ng key ngayong araw (24-hour block)
-    if ip in db_cache["daily_limit"]:
-        return jsonify({
-            "status": "limit",
-            "message": "Your free key has ended please try again tomorrow"
-        }), 403
-
-    if source != "bot":
-        if ip in db_cache["cooldowns"]:
-            elapsed = now - db_cache["cooldowns"][ip]
-            if elapsed < COOLDOWN:
-                return jsonify({
-                    "status": "cooldown",
-                    "redirect": "https://kazehayamodz-main-page-90wu.onrender.com",
-                })
-
-    token_id = str(uuid.uuid4())
-    db_cache["tokens"][token_id] = {"ip": ip, "time": now}
-    return jsonify({"status": "success", "token": token_id})
-
-
-# ==========================================
-# 1. CORE LOGIC FUNCTIONS
-# ==========================================
-def handle_getkey(db_type):
-    token_id = request.args.get("token")
-    source = request.args.get("src", "site")
-    # Pinalitan ang default duration patungong 3 hours ('3h')
-    duration = request.args.get("duration", "3h")
-    max_dev = request.args.get("max", "1")
-    now = time.time()
-
-    if not token_id or token_id not in db_cache["tokens"]:
-        return jsonify({"status": "error", "message": "Token expired"}), 403
-
-    token_data = db_cache["tokens"][token_id]
-    ip = token_data["ip"]
-
-    if is_vpn_or_proxy(ip):
-        return jsonify({"status": "error", "message": "VPN or Proxy detected!"}), 403
-
-    if ip in db_cache["daily_limit"]:
-        return jsonify({
-            "status": "limit",
-            "message": "Your free key has ended please try again tomorrow"
-        }), 403
-
-    if ip in db_cache["ip_limit"]:
-        wait = int(KEY_LIMIT - (now - db_cache["ip_limit"][ip]))
-        if wait > 0:
-            return jsonify({"status": "wait", "message": "Bypass detected!"}), 403
-
-    prefix = "Kaze-" if source == "bot" else "KazeFreeKey-"
-    key = prefix + "".join(
-        random.choices(string.ascii_letters + string.digits, k=12)
-    )
-    expiry_seconds = convert_duration(duration)
-
-    try:
-        conn = get_db_connection(db_type)
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO keys (key_code, expiry, device, revoked, login_time, max_devices)
-            VALUES (%s, %s, NULL, FALSE, NULL, %s);
-            """,
-            (key, now + expiry_seconds, int(max_dev)),
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        return jsonify(
-            {"status": "error", "message": f"Database error: {str(e)}"}
-        ), 500
-
-    db_cache["ip_limit"][ip] = now
-    # I-save ang oras para ma-block sila ng 24 oras bago makakuha ulit
-    db_cache["daily_limit"][ip] = {"time": now}
-    del db_cache["tokens"][token_id]
-
-    return jsonify({
-        "status": "success",
-        "key": key,
-        "expires_in": expiry_seconds,
-        "max_devices": max_dev,
-    })
-
-
-def handle_customkey(db_type):
-    custom_name = request.args.get("name")
-    duration = request.args.get("duration", "3h")
-    max_dev = request.args.get("max", "1")
-    now = time.time()
-
-    if not custom_name:
-        return jsonify(
-            {"status": "error", "message": "Custom key name is missing"}
-        ), 400
-
-    key = custom_name.strip().replace(" ", "-")
-    expiry_seconds = convert_duration(duration)
-
-    try:
-        conn = get_db_connection(db_type)
-        cur = conn.cursor()
-        cur.execute("SELECT key_code FROM keys WHERE key_code = %s;", (key,))
-        if cur.fetchone():
-            cur.close()
-            conn.close()
-            return jsonify(
-                {"status": "error", "message": "Key name already exists!"}
-            ), 409
-
-        cur.execute(
-            """
-            INSERT INTO keys (key_code, expiry, device, revoked, login_time, max_devices)
-            VALUES (%s, %s, NULL, FALSE, NULL, %s);
-            """,
-            (key, now + expiry_seconds, int(max_dev)),
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
-        send_telegram_alert(
-            f"🎁 *{tag} Custom Key Created*\n"
-            f"Key: `{key}`\n"
-            f"Duration: `{duration}`\n"
-            f"Max Devices: `{max_dev}`"
-        )
-        return jsonify({
-            "status": "success",
-            "key": key,
-            "expires_in": expiry_seconds,
-            "max_devices": max_dev,
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-def handle_verify(db_type):
-    cleanup()
-    key = request.args.get("key")
-    device = request.args.get("device")
-    if not key or not device:
-        return jsonify({"status": "invalid"}), 400
-
-    conn = get_db_connection(db_type)
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM keys WHERE key_code = %s;", (key,))
-    data = cur.fetchone()
-
-    tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
-
-    if not data:
-        cur.close()
-        conn.close()
-        return jsonify({"status": "invalid"})
-
-    if data["revoked"]:
-        cur.close()
-        conn.close()
-        send_telegram_alert(
-            f"❌ *{tag} Key Revoked Attempt*\nKey: `{key}`\nDevice: `{device}`"
-        )
-        return jsonify({"status": "revoked"})
-
-    now = time.time()
-    if now > data["expiry"]:
-        cur.close()
-        conn.close()
-        send_telegram_alert(
-            f"❌ *{tag} Key Expired Attempt*\nKey: `{key}`\nDevice: `{device}`"
-        )
-        return jsonify({"status": "expired"})
-
-    current_devices = data["device"].split(",") if data["device"] else []
-    max_allowed = data.get("max_devices", 1)
-    remaining_seconds = int(data["expiry"] - now)
-    time_left_str = format_remaining_time(remaining_seconds)
-
-    def success_response():
-        return jsonify({
-            "status": "valid",
-            "expires_in_sec": remaining_seconds,
-            "expire_str": time_left_str,
-        })
-
-    if device in current_devices:
-        cur.close()
-        conn.close()
-        device_index = current_devices.index(device) + 1
-        counter_str = f" ({device_index}/{max_allowed})" if max_allowed > 1 else ""
-        send_telegram_alert(
-            f"✓ *{tag} Key Used{counter_str}*\n"
-            f"Key: `{key}`\n"
-            f"Device: `{device}`\n"
-            f"Expires in: `{time_left_str}`"
-        )
-        return success_response()
-
-    if len(current_devices) < max_allowed:
-        current_devices.append(device)
-        new_device_string = ",".join(current_devices)
-
-        cur.execute(
-            "UPDATE keys SET device = %s, login_time = %s WHERE key_code = %s;",
-            (new_device_string, now, key),
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        counter_str = (
-            f" ({len(current_devices)}/{max_allowed})" if max_allowed > 1 else ""
-        )
-        send_telegram_alert(
-            f"✓ *{tag} Key Used{counter_str}*\n"
-            f"Key: `{key}`\n"
-            f"Device: `{device}`\n"
-            f"Expires in: `{time_left_str}`"
-        )
-        return success_response()
-
-    cur.close()
-    conn.close()
-    send_telegram_alert(
-        f"🔒 *{tag} Max Device Limit Reached*\n"
-        f"Key: `{key}`\n"
-        f"Attempt Device: `{device}`\n"
-        f"Slots: `{len(current_devices)}/{max_allowed}`"
-    )
-    return jsonify({"status": "locked"})
-
-
-def handle_unrevoke(db_type):
-    key = request.args.get("key")
-    if not key:
-        return jsonify({"status": "error", "message": "Missing key"}), 400
-    try:
-        conn = get_db_connection(db_type)
-        cur = conn.cursor()
-        cur.execute("UPDATE keys SET revoked = FALSE WHERE key_code = %s;", (key,))
-        conn.commit()
-        count = cur.rowcount
-        cur.close()
-        conn.close()
-
-        if count == 0:
-            return jsonify({"status": "error", "message": "Key not found"}), 404
-
-        tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
-        send_telegram_alert(f"🟩 *{tag} Key Successfully Unrevoked*\nKey: `{key}`")
-        return jsonify({"status": "success"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-def handle_reset(db_type):
-    key = request.args.get("key")
-    if not key:
-        return jsonify({"status": "error"}), 400
-
-    conn = get_db_connection(db_type)
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE keys SET device = NULL, login_time = NULL WHERE key_code = %s;",
-        (key,),
-    )
-    conn.commit()
-    count = cur.rowcount
-    cur.close()
-    conn.close()
-
-    if count == 0:
-        return jsonify({"status": "error"}), 404
-    tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
-    send_telegram_alert(f"🔄 *{tag} Key Device Reset*\nKey: `{key}`")
-    return jsonify({"status": "success"})
-
-
-def handle_list(db_type):
-    try:
-        status_filter = request.args.get("status", "active")
-        now = time.time()
-
-        conn = get_db_connection(db_type)
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-
-        if status_filter == "revoked":
-            cur.execute(
-                """
-                SELECT key_code, device, expiry, max_devices 
-                FROM keys 
-                WHERE revoked = TRUE 
-                ORDER BY expiry DESC;
-                """
-            )
-        else:
-            cur.execute(
-                """
-                SELECT key_code, device, expiry, max_devices 
-                FROM keys 
-                WHERE revoked = FALSE AND expiry > %s 
-                ORDER BY expiry ASC;
-                """,
-                (now,),
-            )
-
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-
-        result = []
-        for r in rows:
-            result.append({
-                "key": r.get("key_code") or "UNKNOWN",
-                "device": r.get("device"),
-                "max_devices": r.get("max_devices") or 1,
-            })
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Backend list failure: {str(e)}",
-        }), 500
-
-
-def handle_delete(db_type):
-    key = request.args.get("key")
-    if not key:
-        return jsonify({"status": "error", "message": "Missing key"}), 400
-    try:
-        conn = get_db_connection(db_type)
-        cur = conn.cursor()
-        cur.execute("DELETE FROM keys WHERE key_code = %s;", (key,))
-        conn.commit()
-        count = cur.rowcount
-        cur.close()
-        conn.close()
-        if count == 0:
-            return jsonify({"status": "error", "message": "Key not found"}), 404
-        return jsonify({"status": "success"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-def handle_stats(db_type):
-    try:
-        now = time.time()
-        conn = get_db_connection(db_type)
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM keys;")
-        total = cur.fetchone()[0]
-        cur.execute(
-            "SELECT COUNT(*) FROM keys WHERE revoked = FALSE AND expiry > %s;",
-            (now,),
-        )
-        active = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-
-        return jsonify({
-            "total_keys": total,
-            "active_keys": active,
-            "expired_keys": total - active,
-        })
-    except Exception:
-        return jsonify({"total_keys": 0, "active_keys": 0, "expired_keys": 0})
-
-
-# ==========================================
-# 2. ROUTES FOR CODM INJECTOR (Default)
-# ==========================================
-@app.route("/getkey")
-def getkey_injector():
-    return handle_getkey("injector")
-
-
-@app.route("/customkey")
-def custom_key_injector():
-    return handle_customkey("injector")
-
-
-@app.route("/verify")
-def verify_injector():
-    return handle_verify("injector")
-
-
-@app.route("/revoke")
-def revoke_injector():
-    return handle_revoke("injector")
-
-
-@app.route("/unrevoke")
-def unrevoke_injector():
-    return handle_unrevoke("injector")
-
-
-@app.route("/reset")
-def reset_injector():
-    return handle_reset("injector")
-
-
-@app.route("/list")
-def list_injector():
-    return handle_list("injector")
-
-
-@app.route("/delete")
-def delete_injector():
-    return handle_delete("injector")
-
-
-@app.route("/stats")
-def stats_injector():
-    return handle_stats("injector")
-
-
-# ==========================================
-# 3. ROUTES FOR CODM SCRIPT
-# ==========================================
-@app.route("/script/getkey")
-def getkey_script():
-    return handle_getkey("script")
-
-
-@app.route("/script/customkey")
-def custom_key_script():
-    return handle_customkey("script")
-
-
-@app.route("/script/verify")
-def verify_script():
-    return handle_verify("script")
-
-
-@app.route("/script/revoke")
-def revoke_script():
-    return handle_revoke("script")
-
-
-@app.route("/script/unrevoke")
-def unrevoke_script():
-    return handle_unrevoke("script")
-
-
-@app.route("/script/reset")
-def reset_script():
-    return handle_reset("script")
-
-
-@app.route("/script/list")
-def list_script():
-    return handle_list("script")
-
-
-@app.route("/script/delete")
-def delete_script():
-    return handle_delete("script")
-
-
-@app.route("/script/stats")
-def stats_script():
-    return handle_stats("script")
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-    
+}
+
+function checkLocalStorageLimit() {
+    let lastKeyTime = localStorage.getItem("kaze_last_key_time");
+    if (!lastKeyTime) return;
+
+    let now = new Date().getTime();
+    let cooldownDuration = 24 * 60 * 60 * 1000; // 24 Hours in milliseconds
+    let timeLeft = cooldownDuration - (now - parseInt(lastKeyTime));
+
+    if (timeLeft > 0) {
+        showLockOverlayWithTimer(timeLeft);
+    } else {
+        localStorage.removeItem("kaze_last_key_time");
+    }
+}
+
+function showLockOverlayWithTimer(durationMs) {
+    const lockOverlay = document.getElementById('lockOverlay');
+    const lockTitle = document.getElementById('lockTitle');
+    const lockDesc = document.getElementById('lockDesc');
+    const lockTimer = document.getElementById('lockTimer');
+
+    lockTitle.innerText = "LIMIT REACHED";
+    lockDesc.innerText = "Your free key has ended please try again tomorrow";
+    lockTimer.style.display = "block";
+    lockOverlay.style.display = "flex";
+
+    let totalSecs = Math.floor(durationMs / 1000);
+
+    let timerInterval = setInterval(() => {
+        totalSecs--;
+        
+        if (totalSecs <= 0) {
+            clearInterval(timerInterval);
+            lockOverlay.style.display = "none";
+            localStorage.removeItem("kaze_last_key_time");
+            location.reload();
+            return;
+        }
+
+        let hours = Math.floor(totalSecs / 3600);
+        let minutes = Math.floor((totalSecs % 3600) / 60);
+        let seconds = totalSecs % 60;
+
+        lockTimer.innerText = 
+            String(hours).padStart(2, '0') + ":" + 
+            String(minutes).padStart(2, '0') + ":" + 
+            String(seconds).padStart(2, '0');
+    }, 1000);
+}
+
+window.onload = checkSystemStatus;
+</script>
+
+</body>
+</html>
