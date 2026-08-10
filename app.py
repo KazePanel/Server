@@ -18,8 +18,9 @@ CORS(app)
 TOKEN_EXPIRY = 20
 COOLDOWN = 120
 KEY_LIMIT = 120
+COOLDOWN_LIMIT = 86400  # 24 Hours in seconds (Bawal kumuha ulit hanggang lumipas ang 24 oras)
 
-db_cache = {"tokens": {}, "ip_limit": {}, "cooldowns": {}}
+db_cache = {"tokens": {}, "ip_limit": {}, "cooldowns": {}, "daily_limit": {}}
 
 TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = os.getenv("OWNER_ID")
@@ -54,6 +55,31 @@ def cleanup():
     for ip in list(db_cache["ip_limit"].keys()):
         if now - db_cache["ip_limit"][ip] > KEY_LIMIT:
             del db_cache["ip_limit"][ip]
+            
+    # Linisin ang 24-hour limit paglipas ng 24 oras (86400 seconds)
+    for ip in list(db_cache["daily_limit"].keys()):
+        if now - db_cache["daily_limit"][ip]["time"] > COOLDOWN_LIMIT:
+            del db_cache["daily_limit"][ip]
+
+
+# ======================
+# ANTI-VPN CHECK HELPER
+# ======================
+def is_vpn_or_proxy(ip: str) -> bool:
+    if ip in ["127.0.0.1", "localhost", "::1"]:
+        return False
+        
+    try:
+        response = requests.get(f"http://ip-api.com/json/{ip}?fields=status,hosting", timeout=3)
+        data = response.json()
+        
+        if data.get("status") == "success":
+            if data.get("hosting") == True:
+                return True
+    except Exception:
+        pass
+        
+    return False
 
 
 def send_telegram_alert(message: str):
@@ -97,7 +123,7 @@ def format_remaining_time(seconds: int) -> str:
 
 def convert_duration(duration: str) -> int:
     if not duration:
-        return 1800
+        return 10800  # Default to 3 hours if empty
     duration = str(duration).lower().strip()
     try:
         if duration.endswith("m"):
@@ -110,7 +136,7 @@ def convert_duration(duration: str) -> int:
             return 999999999
         return int(duration)
     except ValueError:
-        return 1800
+        return 10800
 
 
 @app.route("/")
@@ -124,6 +150,20 @@ def token():
     ip = request.remote_addr
     now = time.time()
     source = request.args.get("src", "site")
+
+    # Anti-VPN Check
+    if is_vpn_or_proxy(ip):
+        return jsonify({
+            "status": "error",
+            "message": "VPN or Proxy detected! Please disable your VPN to continue."
+        }), 403
+
+    # Check kung nakakuha na ng key ngayong araw (24-hour block)
+    if ip in db_cache["daily_limit"]:
+        return jsonify({
+            "status": "limit",
+            "message": "Your free key has ended please try again tomorrow"
+        }), 403
 
     if source != "bot":
         if ip in db_cache["cooldowns"]:
@@ -145,7 +185,8 @@ def token():
 def handle_getkey(db_type):
     token_id = request.args.get("token")
     source = request.args.get("src", "site")
-    duration = request.args.get("duration", "12h")
+    # Pinalitan ang default duration patungong 3 hours ('3h')
+    duration = request.args.get("duration", "3h")
     max_dev = request.args.get("max", "1")
     now = time.time()
 
@@ -154,6 +195,15 @@ def handle_getkey(db_type):
 
     token_data = db_cache["tokens"][token_id]
     ip = token_data["ip"]
+
+    if is_vpn_or_proxy(ip):
+        return jsonify({"status": "error", "message": "VPN or Proxy detected!"}), 403
+
+    if ip in db_cache["daily_limit"]:
+        return jsonify({
+            "status": "limit",
+            "message": "Your free key has ended please try again tomorrow"
+        }), 403
 
     if ip in db_cache["ip_limit"]:
         wait = int(KEY_LIMIT - (now - db_cache["ip_limit"][ip]))
@@ -185,6 +235,8 @@ def handle_getkey(db_type):
         ), 500
 
     db_cache["ip_limit"][ip] = now
+    # I-save ang oras para ma-block sila ng 24 oras bago makakuha ulit
+    db_cache["daily_limit"][ip] = {"time": now}
     del db_cache["tokens"][token_id]
 
     return jsonify({
@@ -197,7 +249,7 @@ def handle_getkey(db_type):
 
 def handle_customkey(db_type):
     custom_name = request.args.get("name")
-    duration = request.args.get("duration", "12h")
+    duration = request.args.get("duration", "3h")
     max_dev = request.args.get("max", "1")
     now = time.time()
 
@@ -233,7 +285,7 @@ def handle_customkey(db_type):
 
         tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
         send_telegram_alert(
-            f"ðŸŽ *{tag} Custom Key Created*\n"
+            f"🎁 *{tag} Custom Key Created*\n"
             f"Key: `{key}`\n"
             f"Duration: `{duration}`\n"
             f"Max Devices: `{max_dev}`"
@@ -246,6 +298,7 @@ def handle_customkey(db_type):
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 def handle_verify(db_type):
     cleanup()
@@ -270,7 +323,7 @@ def handle_verify(db_type):
         cur.close()
         conn.close()
         send_telegram_alert(
-            f"âŒ *{tag} Key Revoked Attempt*\nKey: `{key}`\nDevice: `{device}`"
+            f"❌ *{tag} Key Revoked Attempt*\nKey: `{key}`\nDevice: `{device}`"
         )
         return jsonify({"status": "revoked"})
 
@@ -279,7 +332,7 @@ def handle_verify(db_type):
         cur.close()
         conn.close()
         send_telegram_alert(
-            f"âŒ *{tag} Key Expired Attempt*\nKey: `{key}`\nDevice: `{device}`"
+            f"❌ *{tag} Key Expired Attempt*\nKey: `{key}`\nDevice: `{device}`"
         )
         return jsonify({"status": "expired"})
 
@@ -301,7 +354,7 @@ def handle_verify(db_type):
         device_index = current_devices.index(device) + 1
         counter_str = f" ({device_index}/{max_allowed})" if max_allowed > 1 else ""
         send_telegram_alert(
-            f"âœ“ *{tag} Key Used{counter_str}*\n"
+            f"✓ *{tag} Key Used{counter_str}*\n"
             f"Key: `{key}`\n"
             f"Device: `{device}`\n"
             f"Expires in: `{time_left_str}`"
@@ -324,7 +377,7 @@ def handle_verify(db_type):
             f" ({len(current_devices)}/{max_allowed})" if max_allowed > 1 else ""
         )
         send_telegram_alert(
-            f"âœ“ *{tag} Key Used{counter_str}*\n"
+            f"✓ *{tag} Key Used{counter_str}*\n"
             f"Key: `{key}`\n"
             f"Device: `{device}`\n"
             f"Expires in: `{time_left_str}`"
@@ -334,12 +387,13 @@ def handle_verify(db_type):
     cur.close()
     conn.close()
     send_telegram_alert(
-        f"ðŸ”’ *{tag} Max Device Limit Reached*\n"
+        f"🔒 *{tag} Max Device Limit Reached*\n"
         f"Key: `{key}`\n"
         f"Attempt Device: `{device}`\n"
         f"Slots: `{len(current_devices)}/{max_allowed}`"
     )
     return jsonify({"status": "locked"})
+
 
 def handle_unrevoke(db_type):
     key = request.args.get("key")
@@ -358,7 +412,7 @@ def handle_unrevoke(db_type):
             return jsonify({"status": "error", "message": "Key not found"}), 404
 
         tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
-        send_telegram_alert(f"ðŸŸ¢ *{tag} Key Successfully Unrevoked*\nKey: `{key}`")
+        send_telegram_alert(f"🟩 *{tag} Key Successfully Unrevoked*\nKey: `{key}`")
         return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -383,7 +437,7 @@ def handle_reset(db_type):
     if count == 0:
         return jsonify({"status": "error"}), 404
     tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
-    send_telegram_alert(f"ðŸ”„ *{tag} Key Device Reset*\nKey: `{key}`")
+    send_telegram_alert(f"🔄 *{tag} Key Device Reset*\nKey: `{key}`")
     return jsonify({"status": "success"})
 
 
@@ -576,4 +630,4 @@ def stats_script():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-        
+    
