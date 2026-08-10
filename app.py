@@ -233,7 +233,7 @@ def handle_customkey(db_type):
 
         tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
         send_telegram_alert(
-            f"🎁 *{tag} Custom Key Created*\n"
+            f"ðŸŽ *{tag} Custom Key Created*\n"
             f"Key: `{key}`\n"
             f"Duration: `{duration}`\n"
             f"Max Devices: `{max_dev}`"
@@ -270,7 +270,7 @@ def handle_verify(db_type):
         cur.close()
         conn.close()
         send_telegram_alert(
-            f"❌ *{tag} Key Revoked Attempt*\nKey: `{key}`\nDevice: `{device}`"
+            f"âŒ *{tag} Key Revoked Attempt*\nKey: `{key}`\nDevice: `{device}`"
         )
         return jsonify({"status": "revoked"})
 
@@ -279,7 +279,7 @@ def handle_verify(db_type):
         cur.close()
         conn.close()
         send_telegram_alert(
-            f"❌ *{tag} Key Expired Attempt*\nKey: `{key}`\nDevice: `{device}`"
+            f"âŒ *{tag} Key Expired Attempt*\nKey: `{key}`\nDevice: `{device}`"
         )
         return jsonify({"status": "expired"})
 
@@ -301,7 +301,7 @@ def handle_verify(db_type):
         device_index = current_devices.index(device) + 1
         counter_str = f" ({device_index}/{max_allowed})" if max_allowed > 1 else ""
         send_telegram_alert(
-            f"✓ *{tag} Key Used{counter_str}*\n"
+            f"âœ“ *{tag} Key Used{counter_str}*\n"
             f"Key: `{key}`\n"
             f"Device: `{device}`\n"
             f"Expires in: `{time_left_str}`"
@@ -324,7 +324,7 @@ def handle_verify(db_type):
             f" ({len(current_devices)}/{max_allowed})" if max_allowed > 1 else ""
         )
         send_telegram_alert(
-            f"✓ *{tag} Key Used{counter_str}*\n"
+            f"âœ“ *{tag} Key Used{counter_str}*\n"
             f"Key: `{key}`\n"
             f"Device: `{device}`\n"
             f"Expires in: `{time_left_str}`"
@@ -334,7 +334,7 @@ def handle_verify(db_type):
     cur.close()
     conn.close()
     send_telegram_alert(
-        f"🔒 *{tag} Max Device Limit Reached*\n"
+        f"ðŸ”’ *{tag} Max Device Limit Reached*\n"
         f"Key: `{key}`\n"
         f"Attempt Device: `{device}`\n"
         f"Slots: `{len(current_devices)}/{max_allowed}`"
@@ -358,7 +358,7 @@ def handle_unrevoke(db_type):
             return jsonify({"status": "error", "message": "Key not found"}), 404
 
         tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
-        send_telegram_alert(f"🟢 *{tag} Key Successfully Unrevoked*\nKey: `{key}`")
+        send_telegram_alert(f"ðŸŸ¢ *{tag} Key Successfully Unrevoked*\nKey: `{key}`")
         return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -383,7 +383,7 @@ def handle_reset(db_type):
     if count == 0:
         return jsonify({"status": "error"}), 404
     tag = "[SCRIPT]" if db_type == "script" else "[INJECTOR]"
-    send_telegram_alert(f"🔄 *{tag} Key Device Reset*\nKey: `{key}`")
+    send_telegram_alert(f"ðŸ”„ *{tag} Key Device Reset*\nKey: `{key}`")
     return jsonify({"status": "success"})
 
 
