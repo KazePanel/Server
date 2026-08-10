@@ -20,7 +20,7 @@ COOLDOWN = 120
 KEY_LIMIT = 120
 COOLDOWN_LIMIT = 86400  # 24 Hours in seconds
 
-db_cache = {"tokens": {}, "ip_limit": {}, "cooldowns": {}, "daily_limit": {}}
+db_cache = {"tokens": {}, "device_limit": {}, "daily_limit": {}}
 
 TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = os.getenv("OWNER_ID")
@@ -47,13 +47,13 @@ def cleanup():
     for t in list(db_cache["tokens"].keys()):
         if now - db_cache["tokens"][t]["time"] > TOKEN_EXPIRY:
             del db_cache["tokens"][t]
-    for ip in list(db_cache["ip_limit"].keys()):
-        if now - db_cache["ip_limit"][ip] > KEY_LIMIT:
-            del db_cache["ip_limit"][ip]
+    for dev in list(db_cache["device_limit"].keys()):
+        if now - db_cache["device_limit"][dev] > KEY_LIMIT:
+            del db_cache["device_limit"][dev]
             
-    for ip in list(db_cache["daily_limit"].keys()):
-        if now - db_cache["daily_limit"][ip]["time"] > COOLDOWN_LIMIT:
-            del db_cache["daily_limit"][ip]
+    for dev in list(db_cache["daily_limit"].keys()):
+        if now - db_cache["daily_limit"][dev]["time"] > COOLDOWN_LIMIT:
+            del db_cache["daily_limit"][dev]
 
 
 def is_vpn_or_proxy(ip: str) -> bool:
@@ -137,7 +137,7 @@ def token():
     cleanup()
     ip = request.remote_addr
     now = time.time()
-    source = request.args.get("src", "site")
+    device_id = request.args.get("device_id")
 
     if is_vpn_or_proxy(ip):
         return jsonify({
@@ -146,8 +146,11 @@ def token():
             "message": "VPN detected please turn off your vpn"
         }), 403
 
-    if ip in db_cache["daily_limit"]:
-        elapsed = now - db_cache["daily_limit"][ip]["time"]
+    if not device_id:
+        return jsonify({"status": "error", "message": "Missing device ID"}), 400
+
+    if device_id in db_cache["daily_limit"]:
+        elapsed = now - db_cache["daily_limit"][device_id]["time"]
         remaining_sec = int(COOLDOWN_LIMIT - elapsed)
         return jsonify({
             "status": "limit",
@@ -156,17 +159,8 @@ def token():
             "message": "Your free key has ended please try again tomorrow"
         }), 403
 
-    if source != "bot":
-        if ip in db_cache["cooldowns"]:
-            elapsed = now - db_cache["cooldowns"][ip]
-            if elapsed < COOLDOWN:
-                return jsonify({
-                    "status": "cooldown",
-                    "redirect": "https://kazefreekeysite.onrender.com",
-                })
-
     token_id = str(uuid.uuid4())
-    db_cache["tokens"][token_id] = {"ip": ip, "time": now}
+    db_cache["tokens"][token_id] = {"device_id": device_id, "time": now}
     return jsonify({"status": "success", "token": token_id})
 
 
@@ -181,13 +175,14 @@ def handle_getkey(db_type):
         return jsonify({"status": "error", "message": "Token expired"}), 403
 
     token_data = db_cache["tokens"][token_id]
-    ip = token_data["ip"]
+    device_id = token_data["device_id"]
+    ip = request.remote_addr
 
     if is_vpn_or_proxy(ip):
         return jsonify({"status": "error", "type": "vpn", "message": "VPN detected please turn off your vpn"}), 403
 
-    if ip in db_cache["daily_limit"]:
-        elapsed = now - db_cache["daily_limit"][ip]["time"]
+    if device_id in db_cache["daily_limit"]:
+        elapsed = now - db_cache["daily_limit"][device_id]["time"]
         remaining_sec = int(COOLDOWN_LIMIT - elapsed)
         return jsonify({
             "status": "limit",
@@ -196,8 +191,8 @@ def handle_getkey(db_type):
             "message": "Your free key has ended please try again tomorrow"
         }), 403
 
-    if ip in db_cache["ip_limit"]:
-        wait = int(KEY_LIMIT - (now - db_cache["ip_limit"][ip]))
+    if device_id in db_cache["device_limit"]:
+        wait = int(KEY_LIMIT - (now - db_cache["device_limit"][device_id]))
         if wait > 0:
             return jsonify({"status": "wait", "message": "Bypass detected!"}), 403
 
@@ -221,8 +216,8 @@ def handle_getkey(db_type):
     except Exception as e:
         return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
 
-    db_cache["ip_limit"][ip] = now
-    db_cache["daily_limit"][ip] = {"time": now}
+    db_cache["device_limit"][device_id] = now
+    db_cache["daily_limit"][device_id] = {"time": now}
     del db_cache["tokens"][token_id]
 
     return jsonify({
