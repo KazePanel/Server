@@ -324,11 +324,20 @@ def handle_verify(db_type):
     if device in current_devices:
         cur.close()
         conn.close()
+        device_index = current_devices.index(device) + 1
+        counter_str = f" ({device_index}/{max_allowed})" if max_allowed > 1 else ""
+        send_telegram_alert(
+            f"✓ *{tag} Key Used{counter_str}*\n"
+            f"Key: `{key}`\n"
+            f"Device: `{device}`\n"
+            f"Expires in: `{time_left_str}`"
+        )
         return success_response()
 
     if len(current_devices) < max_allowed:
         current_devices.append(device)
         new_device_string = ",".join(current_devices)
+
         cur.execute(
             "UPDATE keys SET device = %s, login_time = %s WHERE key_code = %s;",
             (new_device_string, now, key),
@@ -336,10 +345,26 @@ def handle_verify(db_type):
         conn.commit()
         cur.close()
         conn.close()
+
+        counter_str = (
+            f" ({len(current_devices)}/{max_allowed})" if max_allowed > 1 else ""
+        )
+        send_telegram_alert(
+            f"✓ *{tag} Key Used{counter_str}*\n"
+            f"Key: `{key}`\n"
+            f"Device: `{device}`\n"
+            f"Expires in: `{time_left_str}`"
+        )
         return success_response()
 
     cur.close()
     conn.close()
+    send_telegram_alert(
+        f"🔒 *{tag} Max Device Limit Reached*\n"
+        f"Key: `{key}`\n"
+        f"Attempt Device: `{device}`\n"
+        f"Slots: `{len(current_devices)}/{max_allowed}`"
+    )
     return jsonify({"status": "locked"})
 
 
