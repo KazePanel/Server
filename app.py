@@ -456,6 +456,34 @@ def handle_stats(db_type):
     except Exception:
         return jsonify({"total_keys": 0, "active_keys": 0, "expired_keys": 0})
 
+from flask import request
+
+@app.route("/upload_screenshot", methods=["POST"])
+def upload_screenshot():
+    db_type = request.form.get("db_type", "injector")
+    device_id = request.form.get("device", "Unknown Device")
+    
+    # Kunin ang file na pinadala ng injector
+    if "screenshot" not in request.files:
+        return jsonify({"status": "error", "message": "No image attached"}), 400
+    
+    file = request.files["screenshot"]
+    
+    # I-forward ang screenshot sa Telegram Bot mo
+    if TELEGRAM_BOT_TOKEN and OWNER_ID:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+        files = {"photo": (file.filename, file.read(), file.content_type)}
+        payload = {
+            "chat_id": OWNER_ID,
+            "caption": f"📸 *Auto Feedback / Screenshot*\nDevice ID: `{device_id}`"
+        }
+        try:
+            requests.post(url, data=payload, files=files, timeout=10)
+        except Exception as e:
+            pass
+
+    return jsonify({"status": "success"})
+    
 
 @app.route("/getkey")
 def getkey_injector(): return handle_getkey("injector")
